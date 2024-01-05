@@ -43,17 +43,12 @@
         }
 
             .slider-container input[type="text"] {
-                width: 50px; /* Set an appropriate width for your input boxes */
-                margin-right: 10px; /* Add some margin to the right of the input box */
-            }
-
-            .slider-container label,
-            .slider-container output {
-                margin: 0 10px;
+                width: 50px;
+                margin-right: 10px;
             }
 
         input[type="range"] {
-            flex-grow: 1; /* Allow the slider to fill the space */
+            flex-grow: 1;
         }
 
         input[type="submit"] {
@@ -69,45 +64,75 @@
             input[type="submit"]:hover {
                 background-color: #005f73;
             }
-        /* Styles for valid hour inputs */
+
         .hours-input.valid {
-            background-color: lightgreen;
+            background-color: lightsalmon;
         }
-        /* Styles for invalid hour inputs */
+
         .hours-input.invalid {
             background-color: #ffcccc;
         }
-    </style>
 
+        .team-member-row {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .divider {
+            border-bottom: 1px solid #ccc;
+            margin: 20px 0;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            font-weight: bold;
+        }
+    </style>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </head>
 
 <body>
-    <h2>Time Tracking Form</h2>
-    <form action="/" method="post" id="time-tracking-form">
-        <div class="slider-container">
-            <label for="team_member">Team Member:</label>
-            <select id="team_member" name="team_member">
-                {% for member in team_members %}
-                <option value="{{ member }}">{{ member }}</option>
-                {% endfor %}
-            </select>
-            <label for="hours">Hours:</label>
-            <input type="number" id="hours" name="hours" value="8" min="0" style="width: 50px;">
-        </div>
+    <div class="container">
+        <h2>Time Tracking Form</h2>
+        <form action="/" method="post" id="time-tracking-form">
+            <div class="team-member-row">
+                <label for="team_member">Team Member:</label>
+                <select id="team_member" name="team_member">
+                    {% for member in team_members %}
+                    <option value="{{ member }}">{{ member }}</option>
+                    {% endfor %}
+                </select>
+                <label for="hours">Hours:</label>
+                <input type="number" id="hours" name="hours" value="8" min="0" style="width: 50px;">
+            </div>
 
-        {% for category in categories %}
-        <div class="slider-container">
-            <input type="text" class="hours-input" oninput="lockSlider(this)" placeholder="Hours (e.g., 2.5)" />
-            <label for="{{ category|lower }}">{{ category }}:</label>
-            <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues()" disabled>
-            <output id="{{ category|lower }}_value">{{ 100 / num_categories | round }}%</output>
-      
-        </div>
-        {% endfor %}
+            <!-- Section Divider -->
+            <div class="divider"></div>
 
-        <input type="submit" value="Submit">
-    </form>
+            <!-- Column Headers -->
+            <div class="slider-header">
+                <span>Hours Spent</span>
+               
+                <span>% of day</span>
+            </div>
+
+            {% for category in categories %}
+            <div class="slider-container">
+                <input type="text" class="hours-input" oninput="lockSlider(this)" placeholder="Hours (e.g., 2.5)" />
+                <label for="{{ category|lower }}">{{ category }}:</label>
+                <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues()">
+                <!-- Removed the now-unused output element for hours -->
+            </div>
+            {% endfor %}
+
+            <input type="submit" value="Submit">
+        </form>
+    </div>
     <script>
         // Initialize outputs for hours on page load
         document.addEventListener('DOMContentLoaded', function () {

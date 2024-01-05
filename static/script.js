@@ -52,23 +52,50 @@ function lockSlider(inputElement) {
 
 function updateSliderValues(changedSlider) {
     var sliders = document.querySelectorAll('input[type="range"]');
-    // Convert NodeList to Array for locked sliders
     var lockedSliders = Array.from(document.querySelectorAll('.hours-input.valid'));
     var totalHours = parseFloat(document.getElementById('hours').value);
-    var totalPercentage = getTotalPercentage(sliders, lockedSliders); // Define totalPercentage
+    var allocatedHours = getAllocatedHours(lockedSliders);
+    var remainingHours = totalHours - allocatedHours;
+    var remainingPercentage = (remainingHours / totalHours) * 100;
+    var totalUnlockedPercentage = getTotalPercentage(sliders, lockedSliders);
 
-    // If total is exactly 100 or no unlocked sliders, just update the hours
-    if (totalPercentage === 100 || lockedSliders.length === sliders.length) {
-        updateHours(sliders, totalHours);
-        return;
+    // Find all unlocked and non-zero sliders
+    var activeSliders = Array.from(sliders).filter(function (slider) {
+        return !slider.disabled && parseFloat(slider.value) !== 0;
+    });
+
+    // If there is only one active slider left and it's the one being changed
+    if (activeSliders.length === 1 && activeSliders[0] === changedSlider) {
+        // Set this slider to the remaining percentage but not above it
+        changedSlider.value = Math.min(parseFloat(changedSlider.value), remainingPercentage).toString();
+        updateHoursDisplay(changedSlider, totalHours); // Update the hours display for this slider
+    } else {
+        // If there are other sliders, distribute the remaining percentage among them
+        if (totalUnlockedPercentage !== 100) {
+            distributeRemainingPercentage(sliders, changedSlider, totalUnlockedPercentage, lockedSliders);
+        }
+        // Update the hours display for all sliders
+        sliders.forEach(slider => updateHoursDisplay(slider, totalHours));
     }
-
-    // Distribute the remaining percentage to other unlocked sliders
-    distributeRemainingPercentage(sliders, changedSlider, totalPercentage, lockedSliders);
-
-    // Update the placeholders for hour inputs
-    updateHourInputs(sliders, totalHours);
 }
+
+// Helper function to update the hours display for a slider
+function updateHoursDisplay(slider, totalHours) {
+    var sliderPercentage = parseFloat(slider.value);
+    var sliderHours = (sliderPercentage / 100) * totalHours;
+    var correspondingInput = slider.previousElementSibling.previousElementSibling;
+    if (correspondingInput && correspondingInput.value.trim() === '') {
+        correspondingInput.placeholder = sliderHours.toFixed(1) + 'h';
+    }
+}
+
+// Helper function to get the total allocated hours from locked sliders
+function getAllocatedHours(lockedSliders) {
+    return lockedSliders.reduce((total, input) => total + parseFloat(input.value || 0), 0);
+}
+
+// ... rest of the existing script.js functions ...
+
 
 // This function now also receives lockedSliders as an argument
 function getTotalPercentage(sliders, lockedSliders) {
@@ -84,64 +111,48 @@ function getTotalPercentage(sliders, lockedSliders) {
 
 // This function now also receives lockedSliders as an argument
 function distributeRemainingPercentage(sliders, changedSlider, totalPercentage, lockedSliders) {
-    var totalHours = parseFloat(document.getElementById('hours').value);
-    var allocatedHours = 0;
-
-    // Calculate the total hours allocated by locked sliders
-    lockedSliders.forEach(function (input) {
-        allocatedHours += parseFloat(input.value);
-    });
-
-    var remainingHours = totalHours - allocatedHours; // Hours available for unlocked sliders
-    var remainingPercentage = (remainingHours / totalHours) * 100; // Convert to percentage
-
     var unlockedSliders = Array.from(sliders).filter(function (slider) {
         return !slider.disabled &&
             !lockedSliders.includes(slider.previousElementSibling.previousElementSibling);
     });
 
-    if (unlockedSliders.length <= 1) {
-        return; // No need to adjust if there is only one unlocked slider
-    }
-
-    var totalUnlockedPercentage = getTotalPercentage(unlockedSliders, []);
-    var adjustment = remainingPercentage - totalUnlockedPercentage;
-
-    // Calculate the adjustment per slider
-    var adjustmentPerSlider = adjustment / unlockedSliders.length;
-
-    var excess = 0; // This will capture any rounding excess
-
-    // Adjust the other unlocked sliders
-    unlockedSliders.forEach(function (slider, index) {
-        // Don't adjust the slider that was just changed
-        if (slider === changedSlider) {
-            return;
-        }
-
-        let currentPercentage = parseFloat(slider.value);
-        let newPercentage = currentPercentage + adjustmentPerSlider + excess;
-
-        // Make sure we don't go below 0
-        newPercentage = Math.max(newPercentage, 0);
-
-        // Calculate and accumulate any excess due to rounding
-        excess += currentPercentage + adjustmentPerSlider - newPercentage;
-
-        // Update the slider with the new percentage
-        slider.value = newPercentage;
+    // Exclude sliders that are manually set to 0% unless it's the changed slider
+    var slidersToAdjust = unlockedSliders.filter(function (slider) {
+        return slider.value !== '0' || slider === changedSlider;
     });
 
-    // After adjustment, recalculate to ensure we haven't exceeded the remaining percentage due to rounding
-    var postAdjustmentTotal = getTotalPercentage(unlockedSliders, []);
-    if (postAdjustmentTotal > remainingPercentage) {
-        unlockedSliders.forEach(function (slider) {
-            if (slider !== changedSlider) {
-                slider.value -= postAdjustmentTotal - remainingPercentage; // Adjust down slightly
-            }
-        });
+    if (slidersToAdjust.length <= 1) {
+        return; // No need to adjust if there's only one unlocked slider
     }
+
+    var remainingHours = getRemainingHours(lockedSliders);
+    var remainingPercentage = (remainingHours / parseFloat(document.getElementById('hours').value)) * 100;
+    var adjustment = remainingPercentage - totalPercentage;
+
+    // Calculate the adjustment per slider
+    var adjustmentPerSlider = adjustment / slidersToAdjust.length;
+
+    // Adjust the other unlocked sliders, ensuring no slider value becomes negative
+    slidersToAdjust.forEach(function (slider) {
+        if (slider !== changedSlider) {
+            let newValue = parseFloat(slider.value) + adjustmentPerSlider;
+            slider.value = Math.max(newValue, 0); // Ensure slider does not go below 0
+        }
+    });
 }
+
+function getRemainingHours(lockedSliders) {
+    var totalHours = parseFloat(document.getElementById('hours').value);
+    var allocatedHours = 0;
+
+    // Calculate the total hours allocated by locked sliders
+    lockedSliders.forEach(function (input) {
+        allocatedHours += parseFloat(input.value) || 0;
+    });
+
+    return totalHours - allocatedHours; // Remaining hours for unlocked sliders
+}
+
 
 // This new function updates the placeholders for the hour input fields
 function updateHourInputs(sliders, totalHours) {
