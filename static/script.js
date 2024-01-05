@@ -66,8 +66,8 @@ function updateSliderValues(changedSlider) {
     // Distribute the remaining percentage to other unlocked sliders
     distributeRemainingPercentage(sliders, changedSlider, totalPercentage, lockedSliders);
 
-    // Update hours after adjusting the sliders
-    updateHours(sliders, totalHours);
+    // Update the placeholders for hour inputs
+    updateHourInputs(sliders, totalHours);
 }
 
 // This function now also receives lockedSliders as an argument
@@ -143,13 +143,21 @@ function distributeRemainingPercentage(sliders, changedSlider, totalPercentage, 
     }
 }
 
-function updateHours(sliders, totalHours) {
+// This new function updates the placeholders for the hour input fields
+function updateHourInputs(sliders, totalHours) {
     sliders.forEach(function (slider) {
-        let sliderPercentage = parseFloat(slider.value);
-        let sliderHours = (sliderPercentage / 100) * totalHours;
-        document.getElementById(slider.name + '_value').textContent = Math.round(sliderPercentage) + '%';
-        document.getElementById(slider.name + '_hours').textContent = sliderHours.toFixed(1) + 'h';
+        // Find the corresponding hour input
+        let hourInput = slider.previousElementSibling.previousElementSibling;
+        if (hourInput && hourInput.value.trim() === '') {
+            // Calculate the hours based on the slider's percentage
+            let sliderPercentage = parseFloat(slider.value);
+            let sliderHours = (sliderPercentage / 100) * totalHours;
+            // Set the placeholder to the calculated hours
+            hourInput.placeholder = sliderHours.toFixed(1) + 'h';
+        }
     });
+    // Update the hour input placeholders when a value is locked
+    updateHourInputs(Array.from(document.querySelectorAll('input[type="range"]')), parseFloat(document.getElementById('hours').value));
 }
 
 // Add the event listener to the total hours input

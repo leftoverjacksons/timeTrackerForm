@@ -102,7 +102,7 @@
             <label for="{{ category|lower }}">{{ category }}:</label>
             <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues()" disabled>
             <output id="{{ category|lower }}_value">{{ 100 / num_categories | round }}%</output>
-            <output id="{{ category|lower }}_hours">0</output>
+      
         </div>
         {% endfor %}
 
