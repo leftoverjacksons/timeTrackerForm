@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Tracking Form</title>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+    <h2>Time Tracking Form</h2>
+    <form action="/" method="post" id="time-tracking-form">
+        <label for="team_member">Team Member:</label>
+        <select id="team_member" name="team_member">
+            {% for member in team_members %}
+            <option value="{{ member }}">{{ member }}</option>
+            {% endfor %}
+        </select><br>
+
+        {% for category in categories %}
+        <label for="{{ category|lower }}">{{ category }}:</label>
+        <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues()">
+        <span id="{{ category|lower }}_value">{{ 100 / num_categories }}%</span><br>
+        {% endfor %}
+
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>
