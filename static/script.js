@@ -40,6 +40,8 @@ function lockSlider(inputElement) {
     }
 
     updateSliderValues(slider);  // Update the sliders and hours display
+    // Call the function to update the placeholders for the hour inputs
+    updateHourInputs(document.querySelectorAll('input[type="range"]'), totalHours);
 }
 
 function updateSliderValues(changedSlider) {
@@ -48,7 +50,7 @@ function updateSliderValues(changedSlider) {
     var totalHours = parseFloat(document.getElementById('hours').value);
     var remainingHours = getRemainingHours(lockedSliders);
     var remainingPercentage = (remainingHours / totalHours) * 100;
-
+    var hourInputs = document.querySelectorAll('.hours-input');
     // Find all unlocked and non-zero sliders
     var activeSliders = Array.from(sliders).filter(function (slider) {
         return !slider.disabled && parseFloat(slider.value) !== 0;
@@ -68,6 +70,22 @@ function updateSliderValues(changedSlider) {
 
     // Update the hours display for all sliders
     updateHours(sliders, totalHours);
+    // Call the function to update the placeholders for the hour inputs
+    updateHourInputs(sliders, totalHours);
+}
+
+function updateHourInputs(sliders, totalHours) {
+    console.log('Updating hour inputs placeholders'); // For debugging
+    sliders.forEach(function (slider) {
+        let hourInput = slider.previousElementSibling.previousElementSibling;
+        console.log(`Current slider value for ${slider.id}:`, slider.value); // For debugging
+        if (hourInput && hourInput.value.trim() === '') {
+            let sliderPercentage = parseFloat(slider.value);
+            let sliderHours = (sliderPercentage / 100) * totalHours;
+            console.log(`Setting placeholder for ${hourInput.id}:`, sliderHours.toFixed(1) + 'h'); // For debugging
+            hourInput.placeholder = sliderHours.toFixed(1) + 'h';
+        }
+    });
 }
 
 function distributeRemainingPercentage(sliders, changedSlider, remainingPercentage, lockedSliders) {
@@ -95,13 +113,15 @@ function updateHours(sliders, totalHours) {
     sliders.forEach(function (slider) {
         let sliderPercentage = parseFloat(slider.value);
         let sliderHours = (sliderPercentage / 100) * totalHours;
-        document.getElementById(slider.id + '_value').textContent = sliderPercentage.toFixed(0) + '%';
+        // Removed problematic line
+        // document.getElementById(slider.id + '_value').textContent = sliderPercentage.toFixed(0) + '%';
         let correspondingInput = slider.previousElementSibling.previousElementSibling;
         if (correspondingInput && correspondingInput.value.trim() === '') {
             correspondingInput.placeholder = sliderHours.toFixed(1) + 'h';
         }
     });
 }
+
 
 function getAllocatedHours(lockedSliders) {
     return lockedSliders.reduce((total, input) => total + (parseFloat(input.value) || 0), 0);
