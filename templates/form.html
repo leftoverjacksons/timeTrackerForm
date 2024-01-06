@@ -117,7 +117,7 @@
             <!-- Column Headers -->
             <div class="slider-header">
                 <span>Hours Spent</span>
-               
+
                 <span>% of day</span>
             </div>
 
@@ -125,10 +125,25 @@
             <div class="slider-container">
                 <input type="text" class="hours-input" oninput="lockSlider(this)" placeholder="Hours (e.g., 2.5)" />
                 <label for="{{ category|lower }}">{{ category }}:</label>
-                <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues()">
-                <!-- Removed the now-unused output element for hours -->
+                <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues(this)">
+
+                <!-- Conditional dropdown for NPI and Sustaining -->
+                {% if category.lower() == 'npi' or category.lower() == 'sustaining' %}
+                <select id="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
+                    <!-- Options go here -->
+                    <option value="Equipment Mounting">Equipment Mounting</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="Tools">Tools</option>
+                    <option value="Condensate Management">Condensate Management</option>
+                    <option value="Indoor Air Quality">Indoor Air Quality</option>
+                    <option value="Components & Consumables">Components & Consumables</option>
+                    <option value="Other">Other</option>
+                </select>
+                {% endif %}
             </div>
             {% endfor %}
+
+
 
             <input type="submit" value="Submit">
         </form>

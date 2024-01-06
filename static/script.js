@@ -50,7 +50,7 @@ function updateSliderValues(changedSlider) {
     var totalHours = parseFloat(document.getElementById('hours').value);
     var remainingHours = getRemainingHours(lockedSliders);
     var remainingPercentage = (remainingHours / totalHours) * 100;
-    var hourInputs = document.querySelectorAll('.hours-input');
+
     // Find all unlocked and non-zero sliders
     var activeSliders = Array.from(sliders).filter(function (slider) {
         return !slider.disabled && parseFloat(slider.value) !== 0;
@@ -58,13 +58,10 @@ function updateSliderValues(changedSlider) {
 
     // If there is only one active slider left and it's the one being changed
     if (activeSliders.length === 1 && activeSliders[0] === changedSlider) {
-        // Set this slider to the remaining percentage but not above it
         changedSlider.value = Math.min(parseFloat(changedSlider.value), remainingPercentage).toString();
     } else if (activeSliders.length === 1) {
-        // If there's only one active slider and it's not the one being changed, set it to the remaining hours
         activeSliders[0].value = remainingPercentage.toString();
     } else {
-        // If there are other sliders, distribute the remaining percentage among them
         distributeRemainingPercentage(sliders, changedSlider, remainingPercentage, lockedSliders);
     }
 
@@ -72,7 +69,22 @@ function updateSliderValues(changedSlider) {
     updateHours(sliders, totalHours);
     // Call the function to update the placeholders for the hour inputs
     updateHourInputs(sliders, totalHours);
+
+    // Show or hide the subfield dropdowns for NPI and Sustaining
+    sliders.forEach(function (slider) {
+        if (slider.id === 'npi' || slider.id === 'sustaining') {
+            let sliderValue = parseFloat(slider.value);
+            let subfieldDropdown = document.getElementById(slider.id + '_subfield');
+            if (subfieldDropdown) {
+                subfieldDropdown.style.display = sliderValue > 0 ? 'block' : 'none';
+            } else {
+                console.error('Dropdown with ID ' + slider.id + '_subfield not found.');
+            }
+        }
+    });
 }
+
+
 
 function updateHourInputs(sliders, totalHours) {
     console.log('Updating hour inputs placeholders'); // For debugging
