@@ -16,24 +16,26 @@ def index():
         gc = gspread.service_account(filename=key_file_path)
 
         # Use the actual key from your Google Sheet's URL
-        sh = gc.open_by_key('1gmK-3cT9hdRfXdG8FV4YMti6mgKVIBLarufkLQDvzeA')  
+        sh = gc.open_by_key('1gmK-3cT9hdRfXdG8FV4YMti6mgKVIBLarufkLQDvzeA')
         # Access the worksheet by name
         worksheet = sh.worksheet("BACKEND DATA FOR APP.PY")
 
         # Fetch the data from the worksheet
         # Sort team members alphabetically before passing to the template
         team_members = sorted(worksheet.col_values(1)[1:])  # Skip header
-        categories = list(set(worksheet.col_values(2)[1:]))  # Skip header and remove duplicates
+        categories = sorted(list(set(worksheet.col_values(2)[1:])))  # Skip header and remove duplicates
         npi_subfields = worksheet.col_values(3)[1:]  # Assuming subfields start at the second row
         sustaining_subfields = worksheet.col_values(3)[1:]  # Assuming subfields start at the second row
 
         # If the request method is POST, handle the form submission
         if request.method == 'POST':
             # Extract form data
-            form_data = request.form
-            team_member = form_data.get('team_member')
-            hours = form_data.get('hours')
-            # ... extract other form data as necessary
+            form_data = request.form.to_dict()
+            print('Form data received:', form_data)  # Add this line to log the form data
+
+            team_member = form_data.pop('team_member')
+            total_hours = form_data.pop('hours')
+            date_now = str(datetime.now())
 
             # Select the 'LOG' sheet or create it if it does not exist
             try:
@@ -44,13 +46,29 @@ def index():
             # Check if headers need to be written
             if not log_worksheet.get_all_values():
                 # The first row is empty, so we need to write the headers
-                headers = ['Date', 'Team Member', 'Hours', 'Category', 'Subfield', 'Comments']  # Update as needed
+                headers = ['Date', 'Team Member', 'Total Hours'] + \
+                          [f"{category} Hours" for category in categories] + \
+                          [f"{category} Subfield" for category in categories if category in ['NPI', 'Sustaining']] + \
+                          ['Comments']
                 log_worksheet.append_row(headers)
 
             # Prepare the data to be written
-            data = [str(datetime.now()), team_member, hours]  # Add other extracted data to this list
+            # Inside your POST request handling
+            row_data = [date_now, team_member, total_hours]
+            for category in categories:
+                hours_field = f"{category.lower()}_hours"
+                category_hours = form_data.get(hours_field, "0")
+                row_data.append(category_hours)
+                if category in ['NPI', 'Sustaining']:
+                    subfield_field = f"{category.lower()}_subfield"
+                    category_subfield = form_data.get(subfield_field, "N/A")
+                    row_data.append(category_subfield)
+
+
             # Append the data to the sheet
-            log_worksheet.append_row(data)
+            log_worksheet.append_row(row_data)
+
+
 
             # Redirect to the same page to show the updated info or clear the form
             return redirect(url_for('index'))

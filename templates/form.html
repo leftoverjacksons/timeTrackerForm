@@ -123,25 +123,25 @@
             <!-- Column Headers -->
             <div class="slider-header">
                 <span>Hours Spent</span>
-
                 <span>% of day</span>
             </div>
 
             {% for category in categories %}
             <div class="slider-container">
-                <input type="text" class="hours-input" oninput="lockSlider(this)" placeholder="Hours (e.g., 2.5)" />
+                <input type="text" class="hours-input" name="{{ category|lower }}_hours" oninput="lockSlider(this)" placeholder="Hours (e.g., 2.5)" />
                 <label for="{{ category|lower }}">{{ category }}:</label>
-                <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues(this)">
-
+                <!-- Remove the name attribute from the range input -->
+                <input type="range" id="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues(this)">
+                
                 <!-- Conditional dropdown for NPI and Sustaining -->
                 {% if category.lower() == 'npi' %}
-                <select id="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
+                <select id="{{ category|lower }}_subfield" name="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
                     {% for subfield in npi_subfields %}
                     <option value="{{ subfield }}">{{ subfield }}</option>
                     {% endfor %}
                 </select>
                 {% elif category.lower() == 'sustaining' %}
-                <select id="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
+                <select id="{{ category|lower }}_subfield" name="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
                     {% for subfield in sustaining_subfields %}
                     <option value="{{ subfield }}">{{ subfield }}</option>
                     {% endfor %}
@@ -149,8 +149,6 @@
                 {% endif %}
             </div>
             {% endfor %}
-
-
 
             <input type="submit" value="Submit">
         </form>

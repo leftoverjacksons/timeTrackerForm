@@ -121,18 +121,25 @@ function distributeRemainingPercentage(sliders, changedSlider, remainingPercenta
     });
 }
 
-function updateHours(sliders, totalHours) {
+function updateHours(sliders, totalHours, shouldLock) {
     sliders.forEach(function (slider) {
         let sliderPercentage = parseFloat(slider.value);
         let sliderHours = (sliderPercentage / 100) * totalHours;
-        // Removed problematic line
-        // document.getElementById(slider.id + '_value').textContent = sliderPercentage.toFixed(0) + '%';
-        let correspondingInput = slider.previousElementSibling.previousElementSibling;
-        if (correspondingInput && correspondingInput.value.trim() === '') {
-            correspondingInput.placeholder = sliderHours.toFixed(1) + 'h';
+        let correspondingInput = document.querySelector(`input[name="${slider.id}_hours"]`);
+
+        // Check if the correspondingInput exists and if the text input is empty or not
+        if (correspondingInput) {
+            // Only update the value if the input is empty or shouldLock is false
+            if (correspondingInput.value.trim() === '' || !shouldLock) {
+                correspondingInput.value = sliderHours.toFixed(1); // Set the value for form submission
+            }
+
+            // If shouldLock is true, lock the slider, otherwise ensure it's enabled
+            slider.disabled = shouldLock;
         }
     });
 }
+
 
 
 function getAllocatedHours(lockedSliders) {
