@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time Tracking Form</title>
+    <title>Time Tracker EZ Form</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -92,13 +92,19 @@
             padding: 0 10px;
             font-weight: bold;
         }
+
+        .subfield-dropdown {
+            display: none; /* Hidden by default */
+            /* Add additional styling as needed */
+        }
+
     </style>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </head>
 
 <body>
     <div class="container">
-        <h2>Time Tracking Form</h2>
+        <h2>DT Engineering Time Tracker Form</h2>
         <form action="/" method="post" id="time-tracking-form">
             <div class="team-member-row">
                 <label for="team_member">Team Member:</label>
@@ -128,16 +134,17 @@
                 <input type="range" id="{{ category|lower }}" name="{{ category|lower }}" min="0" max="100" value="{{ 100 / num_categories }}" oninput="updateSliderValues(this)">
 
                 <!-- Conditional dropdown for NPI and Sustaining -->
-                {% if category.lower() == 'npi' or category.lower() == 'sustaining' %}
+                {% if category.lower() == 'npi' %}
                 <select id="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
-                    <!-- Options go here -->
-                    <option value="Equipment Mounting">Equipment Mounting</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="Tools">Tools</option>
-                    <option value="Condensate Management">Condensate Management</option>
-                    <option value="Indoor Air Quality">Indoor Air Quality</option>
-                    <option value="Components & Consumables">Components & Consumables</option>
-                    <option value="Other">Other</option>
+                    {% for subfield in npi_subfields %}
+                    <option value="{{ subfield }}">{{ subfield }}</option>
+                    {% endfor %}
+                </select>
+                {% elif category.lower() == 'sustaining' %}
+                <select id="{{ category|lower }}_subfield" class="subfield-dropdown" style="display: none;">
+                    {% for subfield in sustaining_subfields %}
+                    <option value="{{ subfield }}">{{ subfield }}</option>
+                    {% endfor %}
                 </select>
                 {% endif %}
             </div>
