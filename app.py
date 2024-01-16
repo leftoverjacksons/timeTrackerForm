@@ -46,14 +46,15 @@ def index():
             # Check if headers need to be written
             if not log_worksheet.get_all_values():
                 # The first row is empty, so we need to write the headers
-                headers = ['Date', 'Team Member', 'Total Hours'] + \
-                          [f"{category} Hours" for category in categories] + \
-                          [f"{category} Subfield" for category in categories if category in ['NPI', 'Sustaining']] + \
-                          ['Comments']
+                headers = ['Date', 'Team Member', 'Total Hours']
+                for category in categories:
+                    headers.append(f"{category} Hours")  # Add hours header for each category
+                    if category in ['NPI', 'Sustaining']:
+                        headers.append(f"{category} Subfield")  # Add subfield header immediately after the corresponding category
+                headers.append('Comments')  # Add comments at the end
                 log_worksheet.append_row(headers)
 
             # Prepare the data to be written
-            # Inside your POST request handling
             row_data = [date_now, team_member, total_hours]
             for category in categories:
                 hours_field = f"{category.lower()}_hours"
@@ -63,6 +64,8 @@ def index():
                     subfield_field = f"{category.lower()}_subfield"
                     category_subfield = form_data.get(subfield_field, "N/A")
                     row_data.append(category_subfield)
+
+           
 
 
             # Append the data to the sheet
