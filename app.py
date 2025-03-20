@@ -297,5 +297,8 @@ def time_data_api():
     
     return jsonify(data)
 
+# if __name__ == '__main__':
+#    app.run(host='0.0.0.0', port=5000, debug=True)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run()  # Remove debug=True
