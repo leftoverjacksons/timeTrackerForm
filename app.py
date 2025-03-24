@@ -4,6 +4,8 @@ import os
 import pandas as pd
 from datetime import datetime
 from gspread.exceptions import WorksheetNotFound
+import re
+from difflib import get_close_matches
 
 app = Flask(__name__)
 
@@ -56,6 +58,105 @@ def get_log_data():
         print(f"Error retrieving log data: {e}")
         return pd.DataFrame()
 
+def normalize_text(text):
+    """Normalize text for better fuzzy matching"""
+    if not text:
+        return ""
+    # Convert to lowercase
+    text = text.lower()
+    # Remove special characters and extra spaces
+    text = re.sub(r'[^\w\s]', '', text)
+    # Replace multiple spaces with a single space
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+def find_close_match(input_project, existing_projects, threshold=0.7):
+    """
+    Find a close match for the input project in the existing projects list using fuzzy matching
+    
+    Parameters:
+    input_project (str): The project name entered by the user
+    existing_projects (list): List of existing project names
+    threshold (float): The similarity threshold for considering a match (0.0 to 1.0)
+    
+    Returns:
+    str or None: The matched existing project name or None if no match found
+    """
+    if not input_project:
+        return None
+        
+    # Normalize input
+    normalized_input = normalize_text(input_project)
+    if not normalized_input:
+        return None
+    
+    # Normalize existing projects
+    normalized_projects = [normalize_text(p) for p in existing_projects if p]
+    
+    # Create a mapping from normalized names back to original names
+    original_mapping = {normalize_text(p): p for p in existing_projects if p}
+    
+    # Try to find a direct match first (case-insensitive)
+    for norm_proj, orig_proj in original_mapping.items():
+        if norm_proj == normalized_input:
+            return orig_proj
+    
+    # Try fuzzy matching
+    matches = get_close_matches(normalized_input, normalized_projects, n=1, cutoff=threshold)
+    
+    if matches:
+        # Return the original project name
+        return original_mapping[matches[0]]
+    
+    return None
+
+def add_project_to_backend(new_project, worksheet=None):
+    """
+    Add a new project to the backend data
+    
+    Parameters:
+    new_project (str): The new project name to add
+    worksheet (gspread.Worksheet, optional): The worksheet object
+    
+    Returns:
+    bool: True if successful, False otherwise
+    """
+    if not new_project or new_project.strip() == "":
+        return False
+        
+    # If no worksheet is provided, get a connection
+    if worksheet is None:
+        sh = get_gsheet_connection()
+        if not sh:
+            return False
+        
+        try:
+            worksheet = sh.worksheet("BACKEND DATA FOR APP.PY")
+        except Exception as e:
+            print(f"Error accessing worksheet: {e}")
+            return False
+    
+    try:
+        # Get all projects from column 4
+        all_projects = worksheet.col_values(4)[1:]  # Skip header
+        
+        # Check if the project already exists (exact match)
+        if new_project in all_projects:
+            print(f"Project already exists: {new_project}")
+            return True  # Already exists, no need to add
+        
+        # Find the first empty cell in column 4 (project column)
+        next_row = len(all_projects) + 2  # +2 because: +1 for header, +1 for 1-indexed
+        
+        # Update the cell with the new project
+        worksheet.update_cell(next_row, 4, new_project)
+        
+        print(f"Added new project: {new_project}")
+        return True
+    except Exception as e:
+        print(f"Error adding project to backend: {e}")
+        return False
+
 @app.route('/')
 def portal():
     """Main portal page"""
@@ -69,9 +170,10 @@ def form():
         return render_template('form.html', 
                               team_members=[], 
                               categories=[], 
-                              npi_subfields=[],
-                              sustaining_subfields=[],
-                              all_subfields=[],
+                              product_families=[],
+                              projects=[],
+                              all_product_families=[],
+                              all_projects=[],
                               error="Could not connect to Google Sheets")
     
     try:
@@ -83,16 +185,18 @@ def form():
         team_members = sorted(worksheet.col_values(1)[1:])  # Skip header
         categories = sorted(list(set(worksheet.col_values(2)[1:])))  # Skip header and remove duplicates
         
-        # Get all subfields from column 3
-        all_subfields = worksheet.col_values(3)[1:]  # Assuming subfields start at the second row
+        # Get all product families from column 3 (renamed from subfields)
+        all_product_families = worksheet.col_values(3)[1:]  # Skip header
+        
+        # Get all projects from column 4
+        all_projects = worksheet.col_values(4)[1:]  # Skip header
         
         # Filter out empty values and duplicates
-        all_subfields = [subfield for subfield in all_subfields if subfield.strip()]
-        unique_subfields = list(set(all_subfields))
+        all_product_families = [pf for pf in all_product_families if pf.strip()]
+        unique_product_families = sorted(list(set(all_product_families)))
         
-        # For now, we'll use the same subfields for both NPI and Sustaining
-        npi_subfields = unique_subfields
-        sustaining_subfields = unique_subfields
+        all_projects = [proj for proj in all_projects if proj.strip()]
+        unique_projects = sorted(list(set(all_projects)))
 
         # If the request method is POST, handle the form submission
         if request.method == 'POST':
@@ -119,26 +223,82 @@ def form():
                     # Extract the task index from the key (e.g., 'tasks[0][category]' -> '0')
                     task_index = key[key.find('[')+1:key.find(']')]
                     task_indices.add(task_index)
-            
+
             for idx in task_indices:
                 category_key = f'tasks[{idx}][category]'
+                product_family_key = f'tasks[{idx}][product_family]'
                 project_key = f'tasks[{idx}][project]'
                 hours_key = f'tasks[{idx}][hours]'
                 comment_key = f'tasks[{idx}][comment]'
-                
-                if category_key in form_data and hours_key in form_data:
+
+                if category_key in form_data:
                     category = form_data[category_key][0]
-                    project = form_data.get(project_key, [''])[0]
-                    hours = form_data[hours_key][0]
-                    comment = form_data.get(comment_key, [''])[0]
+                    product_family = form_data.get(product_family_key, [''])[0]
                     
-                    if category and hours:  # Only add tasks with both category and hours
+                    # Process project field - handle typed input with fuzzy matching
+                    project_input = form_data.get(project_key, [''])[0].strip()
+                    
+                    # If project input is provided
+                    if project_input:
+                        # Try to find a close match in existing projects
+                        matched_project = find_close_match(project_input, unique_projects)
+                        
+                        if matched_project:
+                            # Use the matched existing project
+                            project = matched_project
+                            print(f"Matched '{project_input}' to existing project '{matched_project}'")
+                        else:
+                            # This is a new project, add it to the backend
+                            project = project_input
+                            add_project_to_backend(project, worksheet)
+                    else:
+                        project = ""
+
+                    # Get hours, handling empty or invalid values
+                    hours = form_data.get(hours_key, [''])[0]
+                    if not hours or hours.strip() == '':
+                        # Calculate hours based on percentage if not explicitly set
+                        # This is a fallback measure in case the JavaScript doesn't set hours properly
+                        total_hours = float(form_data.get('hours', ['8'])[0])
+                        task_count = len(task_indices)
+                        hours = str(round(total_hours / task_count, 1))
+                        print(f"Warning: Empty hours value for task {idx}, defaulting to {hours}")
+
+                    comment = form_data.get(comment_key, [''])[0]
+
+                    # Validate that both category and product family are filled out
+                    if category and product_family:
                         tasks.append({
                             'category': category,
+                            'product_family': product_family,
                             'project': project,
                             'hours': hours,
                             'comment': comment
                         })
+                    elif category and not product_family:
+                        error_message = f"Product Family is required for all tasks. Task {int(idx)+1} is missing a Product Family."
+                        print(f"ERROR: {error_message}")
+                        return render_template('form.html', 
+                                          team_members=team_members, 
+                                          categories=categories, 
+                                          product_families=unique_product_families,
+                                          projects=unique_projects,
+                                          all_product_families=unique_product_families,
+                                          all_projects=unique_projects,
+                                          error_message=error_message)
+
+            # Validate that at least one task has been added
+            if not tasks:
+                error_message = "At least one task with a category and product family must be added."
+                print(f"ERROR: {error_message}")
+                return render_template('form.html', 
+                                  team_members=team_members, 
+                                  categories=categories, 
+                                  product_families=unique_product_families,
+                                  projects=unique_projects,
+                                  all_product_families=unique_product_families,
+                                  all_projects=unique_projects,
+                                  error_message=error_message)
             
             # Select the 'LOG' sheet or create it if it does not exist
             try:
@@ -156,7 +316,7 @@ def form():
             else:
                 # Check if the first row contains our expected headers
                 first_row = all_values[0]
-                expected_headers = ['Date', 'Team Member', 'Category', 'Project', 'Hours', 'Comments']
+                expected_headers = ['Date', 'Team Member', 'Category', 'Product Family', 'Project', 'Hours', 'Comments']
     
                 # Check if first row is empty or doesn't match our headers
                 if not first_row or set(expected_headers) != set(first_row):
@@ -165,11 +325,11 @@ def form():
             if needs_headers:
                 # Clear any existing content from the first row
                 if all_values:
-                    log_worksheet.update('A1:F1', [['', '', '', '', '', '']])
+                    log_worksheet.update('A1:G1', [['', '', '', '', '', '', '']])
     
                 # Add the headers
-                headers = ['Date', 'Team Member', 'Category', 'Project', 'Hours', 'Comments']
-                log_worksheet.update('A1:F1', [headers])
+                headers = ['Date', 'Team Member', 'Category', 'Product Family', 'Project', 'Hours', 'Comments']
+                log_worksheet.update('A1:G1', [headers])
                 print("Added headers to LOG sheet")
 
             # Write each task as a separate row
@@ -178,6 +338,7 @@ def form():
                     entry_date,
                     team_member,
                     task['category'],
+                    task['product_family'],
                     task['project'],
                     task['hours'],
                     task['comment']
@@ -187,21 +348,24 @@ def form():
             # Redirect to the same page to show the updated info or clear the form
             return redirect(url_for('form'))
 
+        # Render the template, passing the team_members, categories, and other data
+        return render_template('form.html', 
+                            team_members=team_members, 
+                            categories=categories, 
+                            product_families=unique_product_families,
+                            projects=unique_projects,
+                            all_product_families=unique_product_families,
+                            all_projects=unique_projects)
+
     except Exception as e:
         print(f"Error processing form data: {e}")
-        team_members = []
-        categories = []
-        npi_subfields = []
-        sustaining_subfields = []
-        unique_subfields = []
-
-    # Render the template, passing the team_members, categories, and subfields
-    return render_template('form.html', 
-                          team_members=team_members, 
-                          categories=categories, 
-                          npi_subfields=npi_subfields, 
-                          sustaining_subfields=sustaining_subfields,
-                          all_subfields=unique_subfields)
+        return render_template('form.html', 
+                            team_members=[],
+                            categories=[],
+                            product_families=[],
+                            projects=[],
+                            all_product_families=[],
+                            all_projects=[])
 
 @app.route('/analytics')
 def analytics():
@@ -264,6 +428,37 @@ def time_data_api():
         # Generate timeline data (hours by date)
         timeline_data = df.groupby(df['Date'].dt.strftime('%Y-%m-%d'))['Hours'].sum().to_dict()
         
+        # Create breakdown of hours by team member and category
+        # First create a cross-tabulation
+        team_category_pivot = pd.pivot_table(
+            df, 
+            values='Hours', 
+            index='Team Member', 
+            columns='Category', 
+            aggfunc='sum', 
+            fill_value=0
+        )
+        
+        # Convert to nested dictionary format
+        team_category_data = {}
+        for team_member in team_category_pivot.index:
+            team_category_data[team_member] = team_category_pivot.loc[team_member].to_dict()
+        
+        # Create breakdown of hours by team member and project
+        team_project_pivot = pd.pivot_table(
+            df, 
+            values='Hours', 
+            index='Team Member', 
+            columns='Project', 
+            aggfunc='sum', 
+            fill_value=0
+        )
+        
+        # Convert to nested dictionary format
+        team_project_data = {}
+        for team_member in team_project_pivot.index:
+            team_project_data[team_member] = team_project_pivot.loc[team_member].to_dict()
+        
         # Process data for analytics
         data = {
             'success': True,
@@ -282,7 +477,9 @@ def time_data_api():
             'by_team_member': df.groupby('Team Member')['Hours'].sum().to_dict(),
             'by_project': df.groupby('Project')['Hours'].sum().to_dict(),
             'by_date': timeline_data,
-            'recent_entries': df.sort_values('Date', ascending=False).head(10).to_dict('records')
+            'recent_entries': df.sort_values('Date', ascending=False).head(10).to_dict('records'),
+            'by_team_member_category': team_category_data,
+            'by_team_member_project': team_project_data
         }
         
         return jsonify(data)
@@ -294,11 +491,7 @@ def time_data_api():
             'message': f'Error processing data: {str(e)}',
             'error_type': str(type(e).__name__)
         })
-    
-    return jsonify(data)
-
-# if __name__ == '__main__':
-#    app.run(host='0.0.0.0', port=5000, debug=True)
 
 if __name__ == '__main__':
-    app.run()  # Remove debug=True
+    #app.run()  # remove debug=true
+    app.run(host='0.0.0.0', port=5000, debug=True)

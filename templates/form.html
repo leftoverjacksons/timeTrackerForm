@@ -195,6 +195,23 @@
             padding: 15px 0;
             margin-top: 40px;
         }
+
+        .required-field::after {
+            content: "*";
+            color: #ff0000;
+            margin-left: 3px;
+        }
+
+        .field-instructions {
+            font-size: 12px;
+            color: #666;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
     </style>
 </head>
 
@@ -212,17 +229,22 @@
     <div class="content-container">
         <div class="container">
             <h2>Time Entry Form</h2>
+            <div class="field-instructions">
+                Fields marked with <span style="color: #ff0000;">*</span> are required. At least one task must have a category selected.
+            </div>
+            
             <form action="/form" method="post" id="time-tracking-form">
                 <div class="team-member-row">
-                    <label for="team_member">Team Member:</label>
+                    <label for="team_member" class="required-field">Team Member:</label>
+
                     <select id="team_member" name="team_member">
                         {% for member in team_members %}
                         <option value="{{ member }}">{{ member }}</option>
                         {% endfor %}
                     </select>
-                    <label for="entry_date">Date:</label>
+                    <label for="entry_date" class="required-field">Date:</label>
                     <input type="date" id="entry_date" name="entry_date">
-                    <label for="hours">Hours:</label>
+                    <label for="hours" class="required-field">Hours:</label>
                     <input type="number" id="hours" name="hours" value="8" min="0" style="width: 50px;">
                 </div>
 
@@ -235,12 +257,14 @@
                 <!-- Section Divider -->
                 <div class="divider"></div>
 
+
+
                 <!-- Tasks Container -->
                 <div id="tasks-container">
                     <!-- Initial Task Template -->
                     <div class="task-container" data-task-id="1">
                         <div class="dropdown-row">
-                            <label for="category-1">Category:</label>
+                            <label for="category-1" class="required-field">Category:</label>
                             <select id="category-1" name="tasks[0][category]" class="category-select">
                                 <option value="">Select Category</option>
                                 {% for category in categories %}
@@ -248,17 +272,23 @@
                                 {% endfor %}
                             </select>
 
-                            <label for="project-1">Project:</label>
-                            <select id="project-1" name="tasks[0][project]" class="project-select">
-                                <option value="">Select Project</option>
-                                {% for subfield in npi_subfields %}
-                                <option value="{{ subfield }}">{{ subfield }}</option>
+                            <label for="product-family-1" class="required-field">Product Family:</label>
+
+                            <select id="product-family-1" name="tasks[0][product_family]" class="product-family-select">
+                                <option value="">Select Product Family</option>
+                                {% for pf in product_families %}
+                                <option value="{{ pf }}">{{ pf }}</option>
                                 {% endfor %}
                             </select>
+
+                            <!-- Replace the project select element with this in form.html -->
+                            <label for="project-1">Project:</label>
+                            <input type="text" id="project-1" name="tasks[0][project]" class="project-input" list="project-list" placeholder="Select or type project">
 
                             <button type="button" class="remove-task-btn" onclick="removeTask(this)" style="display: none;">Remove</button>
                         </div>
 
+                        <!-- Rest of the task container remains the same -->
                         <div class="slider-container">
                             <input type="text" class="hours-input" name="tasks[0][hours]" placeholder="Hours" />
                             <label>Hours:</label>
@@ -283,28 +313,21 @@
     </div>
 
     <script>
-        // Store all subfields
-        window.allSubfields = [
-            {% for subfield in all_subfields %}
-                {% if subfield %}
-                    "{{ subfield }}",
-                {% endif %}
-            {% endfor %}
-        ];
-
-        // Store subfields by category
-        window.subfields = {};
-
-        {% for category in categories %}
-            window.subfields["{{ category.lower() }}"] = window.allSubfields;
+    // Initialize data from the server
+    window.allProductFamilies = [
+        {% for pf in all_product_families %}
+            {% if pf %}"{{ pf }}"{% if not loop.last %},{% endif %}{% endif %}
         {% endfor %}
+    ];
 
-        // Keep these for backward compatibility
-        window.npiSubfields = window.allSubfields;
-        window.sustainingSubfields = window.allSubfields;
+    window.allProjects = [
+        {% for project in all_projects %}
+            {% if project %}"{{ project }}"{% if not loop.last %},{% endif %}{% endif %}
+        {% endfor %}
+    ];
 
-        console.log("Categories available:", [{% for category in categories %}"{{ category }}", {% endfor %}]);
-        console.log("Subfields initialized:", window.subfields);
+    console.log("Product Families:", window.allProductFamilies);
+    console.log("Projects:", window.allProjects);
     </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

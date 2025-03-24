@@ -174,6 +174,37 @@
             button:hover {
                 background-color: #2980b9;
             }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .view-selector {
+            display: flex;
+            align-items: center;
+        }
+
+            .view-selector label {
+                margin-right: 5px;
+                font-size: 0.9em;
+                color: #7f8c8d;
+            }
+
+            .view-selector select {
+                padding: 4px 8px;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+                font-family: 'Roboto', sans-serif;
+            }
+
+        .chart-legend {
+            font-size: 0.85em;
+            margin-top: 10px;
+            color: #7f8c8d;
+        }
     </style>
 </head>
 <body>
@@ -225,30 +256,37 @@
 
             <div class="dashboard">
                 <div class="card">
-                    <h2>Hours by Category</h2>
+                    <div class="chart-header">
+                        <h2>Hours Breakdown</h2>
+                        <div class="view-selector">
+                            <label for="breakdownViewSelect">View by:</label>
+                            <select id="breakdownViewSelect">
+                                <option value="category">Category</option>
+                                <option value="project">Project</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="chart-container">
-                        <canvas id="categoryChart"></canvas>
+                        <canvas id="breakdownChart"></canvas>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h2>Hours by Team Member</h2>
+                    <div class="chart-header">
+                        <h2>Hours by Team Member</h2>
+                        <div class="view-selector">
+                            <label for="teamMemberViewSelect">View by:</label>
+                            <select id="teamMemberViewSelect">
+                                <option value="category">Category</option>
+                                <option value="project">Project</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <canvas id="teamMemberChart"></canvas>
                     </div>
-                </div>
-
-                <div class="card">
-                    <h2>Hours by Project</h2>
-                    <div class="chart-container">
-                        <canvas id="projectChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h2>Hours by Day</h2>
-                    <div class="chart-container">
-                        <canvas id="timelineChart"></canvas>
+                    <div id="teamMemberChartLegend" class="chart-legend">
+                        Note: "Uncategorized" represents hours with no assigned category.
                     </div>
                 </div>
 
@@ -281,6 +319,23 @@
     </div>
 
     <script>
+        // Chart.js global configuration
+        Chart.defaults.font.family = "'Roboto', sans-serif";
+        Chart.defaults.color = '#666';
+
+        // Chart color palettes
+        const colorPalette = [
+            '#3498db', '#2ecc71', '#9b59b6', '#34495e', '#f1c40f', '#e67e22', '#e74c3c', '#ecf0f1', '#95a5a6', '#1abc9c',
+            '#5dade2', '#58d68d', '#af7ac5', '#5d6d7e', '#f4d03f', '#eb984e', '#ec7063', '#f5f7f8', '#aab7b8', '#48c9b0'
+        ];
+
+        // Global variable to store all data
+        let dashboardData = null;
+
+        // Chart instances
+        let teamMemberChart = null;
+        let breakdownChart = null;
+
         document.addEventListener('DOMContentLoaded', function () {
             fetchData();
 
@@ -290,6 +345,15 @@
                 document.getElementById('startDate').value = '';
                 document.getElementById('endDate').value = '';
                 fetchData();
+            });
+
+            // Set up view selector event listeners
+            document.getElementById('teamMemberViewSelect').addEventListener('change', function () {
+                updateTeamMemberChart();
+            });
+
+            document.getElementById('breakdownViewSelect').addEventListener('change', function () {
+                updateBreakdownChart();
             });
         });
 
@@ -316,6 +380,10 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        // Store the data globally for reuse
+                        dashboardData = data;
+
+                        // Update the dashboard
                         updateDashboard(data);
                     } else {
                         console.error('Error loading data:', data.message);
@@ -362,14 +430,8 @@
             document.getElementById('projects').textContent = data.summary.projects;
 
             // Create charts
-            createCategoryChart(data.by_category);
-            createTeamMemberChart(data.by_team_member);
-            createProjectChart(data.by_project);
-
-            // If timeline data exists, create timeline chart
-            if (data.by_date) {
-                createTimelineChart(data.by_date);
-            }
+            updateTeamMemberChart();
+            updateBreakdownChart();
 
             // Update recent entries table
             updateRecentEntriesTable(data.recent_entries);
@@ -379,27 +441,160 @@
             document.getElementById('dashboard').style.display = 'block';
         }
 
-        function createCategoryChart(categoryData) {
-            const ctx = document.getElementById('categoryChart').getContext('2d');
+        function updateTeamMemberChart() {
+            if (!dashboardData) return;
 
-            // Sort categories by hours (descending)
-            const sortedCategories = Object.entries(categoryData)
-                .sort((a, b) => b[1] - a[1]);
+            const ctx = document.getElementById('teamMemberChart').getContext('2d');
+            const viewType = document.getElementById('teamMemberViewSelect').value;
 
-            const labels = sortedCategories.map(item => item[0]);
-            const values = sortedCategories.map(item => item[1]);
+            // Get the appropriate breakdown data based on the view type
+            const breakdownData = viewType === 'category'
+                ? dashboardData.by_team_member_category
+                : dashboardData.by_team_member_project;
+
+            if (!breakdownData) {
+                console.error(`No ${viewType} breakdown data available`);
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.font = '14px Roboto';
+                ctx.textAlign = 'center';
+                ctx.fillText(`No ${viewType} breakdown data available - update app.py first`, ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+
+            console.log(`Team member ${viewType} breakdown:`, breakdownData);
+
+            // Get all team members
+            const teamMembers = Object.keys(breakdownData).sort();
+
+            // Get all categories/projects across all team members
+            const labels = new Set();
+            Object.values(breakdownData).forEach(memberData => {
+                Object.keys(memberData).forEach(label => {
+                    if (memberData[label] > 0) {
+                        labels.add(label);
+                    }
+                });
+            });
+
+            // Calculate the total hours for each label (category/project)
+            const labelTotals = {};
+            Array.from(labels).forEach(label => {
+                labelTotals[label] = 0;
+                // Sum across all team members
+                Object.values(breakdownData).forEach(memberData => {
+                    labelTotals[label] += (memberData[label] || 0);
+                });
+            });
+
+            // Sort labels by total hours (descending)
+            const sortedLabels = Array.from(labels).sort((a, b) => labelTotals[b] - labelTotals[a]);
+
+            // Create datasets for the chart
+            const datasets = sortedLabels.map((label, index) => {
+                return {
+                    label: label,
+                    backgroundColor: colorPalette[index % colorPalette.length],
+                    data: teamMembers.map(member => {
+                        const memberData = breakdownData[member] || {};
+                        return memberData[label] || 0;
+                    })
+                };
+            });
+
+            // Create/update chart
+            if (teamMemberChart) {
+                teamMemberChart.destroy();
+            }
+
+            teamMemberChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: teamMembers,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            title: {
+                                display: true,
+                                text: 'Team Member'
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 15,
+                                padding: 10
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.raw || 0;
+                                    return `${label}: ${value.toFixed(1)} hours`;
+                                },
+                                footer: function (tooltipItems) {
+                                    let sum = 0;
+                                    tooltipItems.forEach(tooltipItem => {
+                                        sum += parseFloat(tooltipItem.raw || 0);
+                                    });
+                                    return `Total: ${sum.toFixed(1)} hours`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update the legend text
+            document.getElementById('teamMemberChartLegend').textContent =
+                `Note: "Uncategorized" represents hours with no assigned ${viewType}.`;
+        }
+
+        function updateBreakdownChart() {
+            const ctx = document.getElementById('breakdownChart').getContext('2d');
+            const viewType = document.getElementById('breakdownViewSelect').value;
+
+            // Determine which data to use based on the view type
+            const rawData = viewType === 'project' ? dashboardData.by_project : dashboardData.by_category;
+
+            // Sort entries by hours (descending)
+            const sortedEntries = Object.entries(rawData || {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Only show top 10
+
+            const labels = sortedEntries.map(item => item[0]);
+            const values = sortedEntries.map(item => item[1]);
+
+            // Destroy existing chart if it exists
+            if (breakdownChart) {
+                breakdownChart.destroy();
+            }
 
             // Create chart
-            new Chart(ctx, {
-                type: 'bar',
+            breakdownChart = new Chart(ctx, {
+                type: 'pie',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Hours',
                         data: values,
-                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                        borderColor: 'rgba(52, 152, 219, 1)',
-                        borderWidth: 1
+                        backgroundColor: colorPalette.slice(0, labels.length),
+                        borderColor: '#fff',
+                        borderWidth: 2
                     }]
                 },
                 options: {
@@ -408,6 +603,10 @@
                     plugins: {
                         legend: {
                             position: 'right',
+                            labels: {
+                                boxWidth: 15,
+                                padding: 15
+                            }
                         },
                         tooltip: {
                             callbacks: {
@@ -416,167 +615,7 @@
                                     const value = context.raw || 0;
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                     const percentage = Math.round((value / total) * 100);
-                                    return `${label}: ${value} hours (${percentage}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Hours'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createTeamMemberChart(teamMemberData) {
-            const ctx = document.getElementById('teamMemberChart').getContext('2d');
-
-            // Sort team members by hours (descending)
-            const sortedMembers = Object.entries(teamMemberData)
-                .sort((a, b) => b[1] - a[1]);
-
-            const labels = sortedMembers.map(item => item[0]);
-            const values = sortedMembers.map(item => item[1]);
-
-            // Create chart
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Hours',
-                        data: values,
-                        backgroundColor: 'rgba(46, 204, 113, 0.7)',
-                        borderColor: 'rgba(46, 204, 113, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Hours'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createTimelineChart(timelineData) {
-            const ctx = document.getElementById('timelineChart').getContext('2d');
-
-            // Sort dates in ascending order
-            const sortedDates = Object.keys(timelineData).sort();
-            const values = sortedDates.map(date => timelineData[date]);
-
-            // Create chart
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: sortedDates,
-                    datasets: [{
-                        label: 'Hours',
-                        data: values,
-                        backgroundColor: 'rgba(155, 89, 182, 0.2)',
-                        borderColor: 'rgba(155, 89, 182, 1)',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        pointRadius: 3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Hours'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createProjectChart(projectData) {
-            const ctx = document.getElementById('projectChart').getContext('2d');
-
-            // Sort projects by hours (descending)
-            const sortedProjects = Object.entries(projectData)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10); // Only show top 10 projects
-
-            const labels = sortedProjects.map(item => item[0]);
-            const values = sortedProjects.map(item => item[1]);
-
-            // Create chart
-            new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: values,
-                        backgroundColor: [
-                            'rgba(52, 152, 219, 0.7)',
-                            'rgba(46, 204, 113, 0.7)',
-                            'rgba(155, 89, 182, 0.7)',
-                            'rgba(52, 73, 94, 0.7)',
-                            'rgba(241, 196, 15, 0.7)',
-                            'rgba(230, 126, 34, 0.7)',
-                            'rgba(231, 76, 60, 0.7)',
-                            'rgba(236, 240, 241, 0.7)',
-                            'rgba(149, 165, 166, 0.7)',
-                            'rgba(26, 188, 156, 0.7)'
-                        ],
-                        borderColor: [
-                            'rgba(52, 152, 219, 1)',
-                            'rgba(46, 204, 113, 1)',
-                            'rgba(155, 89, 182, 1)',
-                            'rgba(52, 73, 94, 1)',
-                            'rgba(241, 196, 15, 1)',
-                            'rgba(230, 126, 34, 1)',
-                            'rgba(231, 76, 60, 1)',
-                            'rgba(236, 240, 241, 1)',
-                            'rgba(149, 165, 166, 1)',
-                            'rgba(26, 188, 156, 1)'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function (context) {
-                                    const label = context.label || '';
-                                    const value = context.raw || 0;
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = Math.round((value / total) * 100);
-                                    return `${label}: ${value} hours (${percentage}%)`;
+                                    return `${label}: ${value.toFixed(1)} hours (${percentage}%)`;
                                 }
                             }
                         }

@@ -20,18 +20,69 @@ window.onload = function () {
         updateAllSliders();
     });
 
-    // Log subfields for debugging
-    console.log("Subfields structure:", window.subfields);
-    console.log("NPI subfields:", window.npiSubfields);
-    console.log("Sustaining subfields:", window.sustainingSubfields);
-
     // Initialize category dropdowns
     document.querySelectorAll('.category-select').forEach(function (select) {
         select.addEventListener('change', function () {
             updateProjectOptions(select);
         });
     });
+
+    // Convert project selects to datalist/input components
+    convertProjectSelectsToDatalist();
+
+    // IMPORTANT FIX: Initialize all sliders to set initial hours values
+    updateAllSliders();
 };
+
+// Function to convert all project selects to datalist/input components
+function convertProjectSelectsToDatalist() {
+    // Create a single datalist element to be used by all project inputs
+    if (!document.getElementById('project-list')) {
+        const datalist = document.createElement('datalist');
+        datalist.id = 'project-list';
+
+        // Add options from the global projects array
+        if (window.allProjects && window.allProjects.length > 0) {
+            window.allProjects.forEach(project => {
+                if (project && project.trim() !== '') {
+                    const option = document.createElement('option');
+                    option.value = project;
+                    datalist.appendChild(option);
+                }
+            });
+        }
+
+        document.body.appendChild(datalist);
+    }
+
+    // Convert all project select elements to text inputs with datalist
+    document.querySelectorAll('.project-select').forEach(projectSelect => {
+        // Create container div to maintain the layout
+        const container = document.createElement('div');
+        container.className = 'project-input-container';
+        container.style.display = 'inline-block';
+        container.style.width = '100%';
+
+        // Create text input
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'project-input';
+        input.name = projectSelect.name;
+        input.id = projectSelect.id;
+        input.setAttribute('list', 'project-list');
+        input.placeholder = 'Select or type project';
+
+        // Copy the current value
+        if (projectSelect.value) {
+            input.value = projectSelect.value;
+        }
+
+        // Replace select with input
+        projectSelect.parentNode.insertBefore(container, projectSelect);
+        container.appendChild(input);
+        projectSelect.remove();
+    });
+}
 
 function initializeTask(taskContainer) {
     const taskId = taskContainer.getAttribute('data-task-id');
@@ -39,6 +90,7 @@ function initializeTask(taskContainer) {
     const hoursInput = taskContainer.querySelector('.hours-input');
     const percentDisplay = taskContainer.querySelector('.percent-display');
     const categorySelect = taskContainer.querySelector('.category-select');
+    const productFamilySelect = taskContainer.querySelector('.product-family-select');
 
     // Set up event listeners for the slider
     slider.addEventListener('input', function () {
@@ -53,16 +105,12 @@ function initializeTask(taskContainer) {
         lockSlider(hoursInput);
     });
 
-    // Set up event listeners for the category select
-    categorySelect.addEventListener('change', function () {
-        console.log("Category changed to:", categorySelect.value);
-        updateProjectOptions(categorySelect);
-    });
+    // Initial setup of dropdowns - populate them on page load
+    updateProjectOptions(categorySelect);
 
-    // Initialize project options based on current category selection
-    if (categorySelect.value) {
-        updateProjectOptions(categorySelect);
-    }
+    // Add debug message to show values
+    console.log("Initial values - Category:", categorySelect.value,
+        "Product Family:", productFamilySelect.value);
 }
 
 function addTask() {
@@ -79,12 +127,27 @@ function addTask() {
     categorySelect.name = 'tasks[' + (taskCounter - 1) + '][category]';
     categorySelect.value = '';
 
-    // Clear and reset the project dropdown
-    const projectSelect = newTask.querySelector('.project-select');
-    projectSelect.id = 'project-' + taskCounter;
-    projectSelect.name = 'tasks[' + (taskCounter - 1) + '][project]';
-    projectSelect.value = '';
-    projectSelect.innerHTML = '<option value="">Select Project</option>';
+    // Reset the product family dropdown
+    const productFamilySelect = newTask.querySelector('.product-family-select');
+    productFamilySelect.id = 'product-family-' + taskCounter;
+    productFamilySelect.name = 'tasks[' + (taskCounter - 1) + '][product_family]';
+    productFamilySelect.value = '';
+
+    // Handle project input (if it's an input with datalist)
+    const projectInput = newTask.querySelector('.project-input');
+    if (projectInput) {
+        projectInput.id = 'project-' + taskCounter;
+        projectInput.name = 'tasks[' + (taskCounter - 1) + '][project]';
+        projectInput.value = '';
+    } else {
+        // Handle if it's still a select (fallback)
+        const projectSelect = newTask.querySelector('.project-select');
+        if (projectSelect) {
+            projectSelect.id = 'project-' + taskCounter;
+            projectSelect.name = 'tasks[' + (taskCounter - 1) + '][project]';
+            projectSelect.value = '';
+        }
+    }
 
     const hoursInput = newTask.querySelector('.hours-input');
     hoursInput.name = 'tasks[' + (taskCounter - 1) + '][hours]';
@@ -109,16 +172,16 @@ function addTask() {
     tasksContainer.appendChild(newTask);
 
     // Set up event listeners for the new task
-    categorySelect.addEventListener('change', function () {
-        console.log(`Category changed for task ${taskCounter} to:`, categorySelect.value);
-        updateProjectOptions(categorySelect);
-    });
-
-    // Initialize the new task
     initializeTask(newTask);
 
     // Update all sliders to balance the percentages
     updateAllSliders();
+
+    // Convert project select to datalist/input if it's still a select
+    const projectSelect = newTask.querySelector('.project-select');
+    if (projectSelect) {
+        convertProjectSelectsToDatalist();
+    }
 }
 
 function removeTask(button) {
@@ -133,35 +196,54 @@ function removeTask(button) {
 
 function updateProjectOptions(categorySelect) {
     const taskContainer = categorySelect.closest('.task-container');
+    const productFamilySelect = taskContainer.querySelector('.product-family-select');
+
+    // Find project input - could be either select or input with datalist
+    const projectInput = taskContainer.querySelector('.project-input');
     const projectSelect = taskContainer.querySelector('.project-select');
-    const category = categorySelect.value;
 
-    // Clear the current options
-    projectSelect.innerHTML = '<option value="">Select Project</option>';
+    // Remember the currently selected project if there is one
+    const currentProject = projectInput ? projectInput.value : (projectSelect ? projectSelect.value : '');
 
-    // Skip if no category is selected
-    if (!category) {
-        return;
-    }
+    // Make sure both dropdowns are visible regardless of selection
+    productFamilySelect.style.display = 'block';
 
-    console.log("Updating projects for category:", category);
+    // If we still have a select element (not converted yet), show it
+    if (projectSelect) {
+        projectSelect.style.display = 'block';
 
-    // Always use all available subfields regardless of category
-    const subfields = window.allSubfields || [];
-    console.log(`Using ${subfields.length} subfields for ${category}`);
+        // Clear the current options in project dropdown
+        projectSelect.innerHTML = '<option value="">Select Project</option>';
 
-    // Add the subfields as options
-    subfields.forEach(subfield => {
-        if (subfield && subfield.trim() !== '') {
-            const option = document.createElement('option');
-            option.value = subfield;
-            option.textContent = subfield;
-            projectSelect.appendChild(option);
+        // Add all available projects from the global array
+        if (window.allProjects && window.allProjects.length > 0) {
+            console.log(`Adding ${window.allProjects.length} projects to dropdown`);
+
+            window.allProjects.forEach(project => {
+                if (project && project.trim() !== '') {
+                    const option = document.createElement('option');
+                    option.value = project;
+                    option.textContent = project;
+                    projectSelect.appendChild(option);
+                }
+            });
+
+            // Try to restore previously selected project if it exists in the new options
+            if (currentProject) {
+                // Check if the option still exists
+                const exists = Array.from(projectSelect.options).some(option => option.value === currentProject);
+                if (exists) {
+                    projectSelect.value = currentProject;
+                }
+            }
+        } else {
+            console.warn("No projects available to populate dropdown");
         }
-    });
-
-    // Show the project dropdown
-    projectSelect.style.display = 'block';
+    }
+    // If we have an input with datalist, set its value
+    else if (projectInput && currentProject) {
+        projectInput.value = currentProject;
+    }
 }
 
 function lockSlider(hoursInput) {
@@ -296,3 +378,145 @@ function updateAllSliders() {
         updateSliderValue(slider);
     });
 }
+
+// Updated form validation to require Product Family field
+document.getElementById('time-tracking-form').addEventListener('submit', function (event) {
+    // Prevent the form from submitting by default
+    event.preventDefault();
+
+    let isValid = true;
+    let errorMessage = '';
+
+    // Check if team member is selected
+    const teamMember = document.getElementById('team_member').value;
+    if (!teamMember) {
+        isValid = false;
+        errorMessage += 'Please select a team member.<br>';
+    }
+
+    // Check if date is selected
+    const entryDate = document.getElementById('entry_date').value;
+    if (!entryDate) {
+        isValid = false;
+        errorMessage += 'Please select a date.<br>';
+    }
+
+    // Check if total hours is valid
+    const totalHours = parseFloat(document.getElementById('hours').value);
+    if (isNaN(totalHours) || totalHours <= 0) {
+        isValid = false;
+        errorMessage += 'Please enter a valid number of hours.<br>';
+    }
+
+    // Validate each task
+    const taskContainers = document.querySelectorAll('.task-container');
+    let tasksWithCategory = 0;
+
+    taskContainers.forEach((taskContainer, index) => {
+        const categorySelect = taskContainer.querySelector('.category-select');
+        const productFamilySelect = taskContainer.querySelector('.product-family-select');
+        const hoursInput = taskContainer.querySelector('.hours-input');
+
+        // Check if category is selected (required)
+        if (!categorySelect.value) {
+            isValid = false;
+            errorMessage += `Task ${index + 1}: Please select a category.<br>`;
+        } else {
+            tasksWithCategory++;
+        }
+
+        // Check if product family is selected (required)
+        if (!productFamilySelect.value) {
+            isValid = false;
+            errorMessage += `Task ${index + 1}: Please select a product family.<br>`;
+        }
+
+        // Check if hours is filled and valid
+        const hours = parseFloat(hoursInput.value);
+        if (isNaN(hours) || hours <= 0) {
+            isValid = false;
+            errorMessage += `Task ${index + 1}: Please enter valid hours (must be greater than 0).<br>`;
+        }
+    });
+
+    // Ensure at least one task has a category
+    if (tasksWithCategory === 0) {
+        isValid = false;
+        errorMessage += 'At least one task must have a category selected.<br>';
+    }
+
+    // Show error message or submit the form
+    if (!isValid) {
+        // Display error message
+        showValidationErrors(errorMessage);
+    } else {
+        // Remove any existing error messages
+        hideValidationErrors();
+
+        // Submit the form
+        this.submit();
+    }
+});
+
+// Function to show validation errors
+function showValidationErrors(message) {
+    // Check if error container already exists
+    let errorContainer = document.getElementById('validation-errors');
+
+    if (!errorContainer) {
+        // Create container for error messages
+        errorContainer = document.createElement('div');
+        errorContainer.id = 'validation-errors';
+        errorContainer.className = 'error-message';
+
+        // Insert before the form
+        const form = document.getElementById('time-tracking-form');
+        form.parentNode.insertBefore(errorContainer, form);
+    }
+
+    // Set error message content
+    errorContainer.innerHTML = `
+        <h3>Please fix the following errors:</h3>
+        ${message}
+    `;
+
+    // Scroll to error message
+    errorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Function to hide validation errors
+function hideValidationErrors() {
+    const errorContainer = document.getElementById('validation-errors');
+    if (errorContainer) {
+        errorContainer.remove();
+    }
+}
+
+// Add CSS for the validation errors
+document.addEventListener('DOMContentLoaded', function () {
+    const style = document.createElement('style');
+    style.textContent = `
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .error-message h3 {
+            margin-top: 0;
+            font-size: 16px;
+        }
+        
+        .project-input {
+            width: 100%;
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: 'Roboto', sans-serif;
+        }
+    `;
+    document.head.appendChild(style);
+});
